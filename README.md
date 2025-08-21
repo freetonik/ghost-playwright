@@ -1,7 +1,9 @@
 # Ghost Playwright: Playwright via REST HTTP powered by Cloudflare Workers
 
-*— Mom, can we have web app end to end testing?*
-*— We have web app end to end testing at home!*
+```
+— Mom, can we have web app end to end testing?
+— We have web app end to end testing at home!
+```
 
 Playwright testing framework as a service. Submit a sequence of Playwright actions as JSON, get the log, trace, and screenshots. This is just a Wednesday night proof of concept hacky prototype. Do not use in production.
 
@@ -132,7 +134,7 @@ Supported parameters for jobs:
 - `deviceType`: `'desktop'`, `'mobile'`, or `'tablet'`
 - `browserType`: `'chromium'`, `'firefox'`, or `'webkit'`
 - `options`:
-    - `timeout`: number of seconds (this is timeout for the entire job; see `timeout` per action below)
+    - `timeout`: number of milliseconds (this is timeout for the entire job; see `timeout` per action below)
     - `viewport`: `{ width: number; height: number }` (overrides the defaults)
     - `userAgent`: overrides the default
     - `generateTrace`: boolean; when `true` the job result contains text trace, and trace file is generated
@@ -152,7 +154,7 @@ An action is executor on a locator. Supported locators:
 - `getByName`
 
 Action-specific properties:
-- `timeout`: number of seconds (this is timeout per action, not the whole job)
+- `timeout`: number of milliseconds (this is timeout per action, not the whole job)
 - `text`: used for `fill`
 - `url`: used for `goto`
 - `x`: used for `scroll`
