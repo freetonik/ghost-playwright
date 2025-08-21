@@ -6,51 +6,55 @@ import { cors } from 'hono/cors'
 import { validator } from 'hono/validator'
 import { Buffer } from "node:buffer"
 import { Action, deviceConfigs, Job, JobConfig, jobConfigSchema, JobResult } from './interfaces'
-const app = new Hono<{ Bindings: CloudflareBindings }>()
-app.use('*', cors())
+
+const app = new Hono<{ Bindings: CloudflareBindings }>();
+app.use('*', cors());
 
 // Utility functions
 async function storeJob(job: Job, kv: KVNamespace): Promise<void> {
-    await kv.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: 86400 }) // 24 hours
+    await kv.put(`job:${job.id}`, JSON.stringify(job), { expirationTtl: 86400 }); // 24 hours
 }
 
 async function getJob(jobId: string, kv: KVNamespace): Promise<Job | null> {
-    const jobData = await kv.get(`job:${jobId}`)
-    return jobData ? JSON.parse(jobData) : null
+    const jobData = await kv.get(`job:${jobId}`);
+    return jobData ? JSON.parse(jobData) : null;
 }
 
 async function storeScreenshot(jobId: string, screenshotId: string, imageData: Buffer, kv: KVNamespace): Promise<string> {
-    const key = `screenshot:${jobId}:${screenshotId}.png`
-    await kv.put(key, imageData, { expirationTtl: 86400 })
-    return key
+    const key = `screenshot:${jobId}:${screenshotId}.png`;
+    await kv.put(key, imageData, { expirationTtl: 86400 });
+    return key;
 }
 
 async function storeTrace(jobId: string, traceData: Buffer, kv: KVNamespace): Promise<string> {
-    const key = `trace:${jobId}`
-    console.log("Storing trace" + key)
-    await kv.put(key, traceData, { expirationTtl: 86400 })
-    return key
+    const key = `trace:${jobId}`;
+    console.log("Storing trace" + key);
+    await kv.put(key, traceData, { expirationTtl: 86400 });
+    return key;
 }
 
 // Helper function to get locator from action
 function getLocator(page: any, action: Action) {
     if (action.getByLabel) {
-        return page.getByLabel(action.getByLabel)
+        return page.getByLabel(action.getByLabel);
     }
     if (action.getByText) {
         if (typeof action.getByText === 'string') {
-            return page.getByText(action.getByText)
+            return page.getByText(action.getByText);
         } else {
-            return page.getByText(action.getByText.text, { exact: action.getByText.exact })
+            return page.getByText(action.getByText.text, { exact: action.getByText.exact });
         }
     }
     if (action.getByName) {
-        return page.getByRole('textbox', { name: action.getByName })
+        return page.getByRole('textbox', { name: action.getByName });
+    }
+    if (action.getByAltText) {
+        return page.getByAltText(action.getByAltText);
     }
     if (action.selector) {
-        return page.locator(action.selector)
+        return page.locator(action.selector);
     }
-    return null
+    return null;
 }
 
 function getActionDescription(action: Action): string {
@@ -58,12 +62,12 @@ function getActionDescription(action: Action): string {
     if (action.getByLabel) {
         locatorDesc = `getByLabel("${action.getByLabel}")`
     } else if (action.getByText) {
-        const textValue = typeof action.getByText === 'string' ? action.getByText : action.getByText.text
-        locatorDesc = `getByText("${textValue}")`
+        const textValue = typeof action.getByText === 'string' ? action.getByText : action.getByText.text;
+        locatorDesc = `getByText("${textValue}")`;
     } else if (action.getByName) {
-        locatorDesc = `getByName("${action.getByName}")`
+        locatorDesc = `getByName("${action.getByName}")`;
     } else if (action.selector) {
-        locatorDesc = `locator("${action.selector}")`
+        locatorDesc = `locator("${action.selector}")`;
     }
 
     let actionDesc = action.type
@@ -77,57 +81,60 @@ function getActionDescription(action: Action): string {
     return locatorDesc ? `${actionDesc} on ${locatorDesc}` : actionDesc
 }
 
-// Real Playwright execution using Cloudflare Browser Rendering
-async function executePlaywrightSequence(jobId: string, config: JobConfig, browserBinding: BrowserWorker, artifactsKV: KVNamespace): Promise<JobResult> {
-    const startTime = Date.now()
-    const trace: JobResult['trace'] = { steps: [] }
-    const screenshots: string[] = []
+function getHostWithProtocol(c: any) {
+    const url = new URL(c.req.url)
+    // In production, Cloudflare won’t include a port
+    return url.port ? `http://${url.hostname}:${url.port}` : `https://${url.hostname}`
+}
 
-    let browser
-    let page
+// Real Playwright execution using Cloudflare Browser Rendering
+async function executePlaywrightSequence(jobId: string, config: JobConfig, browserBinding: BrowserWorker, artifactsKV: KVNamespace, hostnameWithProtocol: string): Promise<JobResult> {
+    const startTime = Date.now();
+    const trace: JobResult['trace'] = { steps: [] };
+    const screenshots: string[] = [];
+
+    let browser;
+    let page;
 
     try {
         // Launch browser with configuration
-        const deviceConfig = deviceConfigs[config.deviceType]
-        const launchOptions: any = {
-            keep_alive: 600000 // 10 minutes
-        }
+        const deviceConfig = deviceConfigs[config.deviceType];
 
-        browser = await playwright.launch(browserBinding, launchOptions)
+        browser = await playwright.launch(browserBinding);
         page = await browser.newPage({
             viewport: config.options?.viewport || deviceConfig.viewport,
             userAgent: config.options?.userAgent || deviceConfig.userAgent
-        })
+        });
 
         // Start tracing if requested
         if (config.options?.generateTrace) {
             await page.context().tracing.start({
                 screenshots: true,
                 snapshots: true
-            })
+            });
         }
 
         // Set default timeout
-        page.setDefaultTimeout(config.options?.timeout || 30000)
+        page.setDefaultTimeout(config.options?.timeout || 30000);
 
         // Performance tracking
-        let loadTime = 0
-        let domContentLoaded = 0
-        let networkRequests = 0
-        let totalBytes = 0
+        let loadTime = 0;
+        let domContentLoaded = 0;
+        let networkRequests = 0;
+        let totalBytes = 0;
 
         // Track network requests
         page.on('request', (request) => {
             networkRequests++
-        })
+        });
 
         page.on('response', (response) => {
-            const headers = response.headers()
-            const contentLength = headers['content-length']
+            const headers = response.headers();
+            const contentLength = headers['content-length'];
             if (contentLength) {
                 totalBytes += parseInt(contentLength)
-            }
-        })
+            };
+        });
 
         // Execute actions
         for (let i = 0; i < config.actions.length; i++) {
@@ -188,9 +195,11 @@ async function executePlaywrightSequence(jobId: string, config: JobConfig, brows
                         break;
 
                     case 'expect':
+                        const assertionLocator = getLocator(page, action).first();
                         if (action.toContainText) {
-                            const assertionLocator = getLocator(page, action).first();
                             await expect(assertionLocator).toContainText(action.toContainText);
+                        } else if (action.toBeVisible) {
+                            await expect(assertionLocator).toBeVisible();
                         }
                         break;
 
@@ -198,7 +207,7 @@ async function executePlaywrightSequence(jobId: string, config: JobConfig, brows
                         const screenshotBuffer = await page.screenshot({ type: 'png' })
                         const screenshotId = crypto.randomUUID();
                         await storeScreenshot(jobId, screenshotId, screenshotBuffer, artifactsKV)
-                        screenshots.push(`/api/v1/jobs/${jobId}/screenshots/${screenshotId}.png`)
+                        screenshots.push(`${hostnameWithProtocol}/api/v1/jobs/${jobId}/screenshots/${screenshotId}.png`)
                         break
                 }
 
@@ -219,7 +228,7 @@ async function executePlaywrightSequence(jobId: string, config: JobConfig, brows
                 if (errorScreenshotBuffer) {
                     const screenshotId = crypto.randomUUID();
                     await storeScreenshot(jobId, screenshotId, errorScreenshotBuffer, artifactsKV);
-                    errorScreenshot = `/api/v1/jobs/${jobId}/screenshots/${screenshotId}.png`;
+                    errorScreenshot = `${hostnameWithProtocol}/api/v1/jobs/${jobId}/screenshots/${screenshotId}.png`;
                 }
 
                 trace.steps.push({
@@ -247,7 +256,9 @@ async function executePlaywrightSequence(jobId: string, config: JobConfig, brows
         if (config.options?.generateTrace) {
             const file = await fs.promises.readFile("trace.zip");
             await storeTrace(jobId, file, artifactsKV);
-            trace.traceViewerUrl = `https://trace.playwright.dev/?trace=https://ghost-playwright.rakhimd.workers.dev/api/v1/jobs/${jobId}/trace`
+            // TODO:
+            trace.traceViewerUrl = `https://trace.playwright.dev/?trace=${hostnameWithProtocol}/api/v1/jobs/${jobId}/trace`;
+            trace.traceFile = `${hostnameWithProtocol}/api/v1/jobs/${jobId}/trace`;
         }
 
         return {
@@ -300,21 +311,22 @@ async function executePlaywrightSequence(jobId: string, config: JobConfig, brows
 app.post('/api/v1/jobs',
     validator('json', (value, c) => {
         const result = jobConfigSchema.safeParse(value);
-        if (!result.success) {
-            return c.json({ error: 'Invalid request body', details: result.error.issues }, 400)
-        }
+        if (!result.success) return c.json({ error: 'Invalid request body', details: result.error.issues }, 400)
+
         return result.data;
     }),
     async (c) => {
         const config = c.req.valid('json');
         const jobId = crypto.randomUUID();
 
+        const hostnameWithProtocol = getHostWithProtocol(c);
+
         const job: Job = {
             id: jobId,
             status: 'pending',
             createdAt: new Date().toISOString(),
             config
-        }
+        };
 
         await storeJob(job, c.env.GHOST_PLAYWRIGHT_JOBS_KV);
 
@@ -326,14 +338,14 @@ app.post('/api/v1/jobs',
                     const updatedJob = { ...job, status: 'running' as const };
                     await storeJob(updatedJob, c.env.GHOST_PLAYWRIGHT_JOBS_KV);
 
-                    const result = await executePlaywrightSequence(job.id, config, c.env.MYBROWSER, c.env.GHOST_PLAYWRIGHT_ARTIFACTS_KV);
+                    const result = await executePlaywrightSequence(job.id, config, c.env.MYBROWSER, c.env.GHOST_PLAYWRIGHT_ARTIFACTS_KV, hostnameWithProtocol);
 
                     const completedJob: Job = {
                         ...job,
                         status: result.status === 'success' ? 'completed' : 'failed',
                         completedAt: new Date().toISOString(),
                         result
-                    }
+                    };
 
                     await storeJob(completedJob, c.env.GHOST_PLAYWRIGHT_JOBS_KV);
                 } catch (error) {
@@ -355,7 +367,7 @@ app.post('/api/v1/jobs',
                     await storeJob(failedJob, c.env.GHOST_PLAYWRIGHT_JOBS_KV);
                 }
             })()
-        )
+        );
 
         return c.json({
             jobId,
@@ -386,7 +398,7 @@ app.get('/api/v1/jobs/:jobId/trace', async (c) => {
             'Cache-Control': 'public, max-age=3600'
         }
     });
-})
+});
 
 app.delete('/api/v1/jobs/:jobId', async (c) => {
     const jobId = c.req.param('jobId');
@@ -417,7 +429,7 @@ app.delete('/api/v1/jobs/:jobId', async (c) => {
 
 app.get('/api/v1/jobs/:jobId/screenshots/:screenshotId', async (c) => {
     const jobId = c.req.param('jobId');
-    const screenshotId = c.req.param('screenshotId')
+    const screenshotId = c.req.param('screenshotId');
 
     // TODO: this is ugly, we expect screenshotId from the url to include `.png` which magically matches the real KV key
     const key = `screenshot:${jobId}:${screenshotId}`;
@@ -434,11 +446,11 @@ app.get('/api/v1/jobs/:jobId/screenshots/:screenshotId', async (c) => {
 })
 
 app.onError((err, c) => {
-    console.error('Error:', err)
+    console.error('Error:', err);
     return c.json({
         error: 'Internal server error',
         message: err.message
-    }, 500)
+    }, 500);
 });
 
 app.notFound((c) => {
@@ -448,4 +460,4 @@ app.notFound((c) => {
     }, 404)
 });
 
-export default app
+export default app;

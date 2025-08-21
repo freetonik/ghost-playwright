@@ -29,6 +29,7 @@ export interface Action {
     getByLabel?: string
     getByText?: string | { text: string; exact?: boolean }
     getByName?: string
+    getByAltText?: string
     // Action-specific properties
     text?: string
     timeout?: number
@@ -36,6 +37,7 @@ export interface Action {
     x?: number
     y?: number
     toContainText?: string
+    toBeVisible?: boolean
 }
 
 export interface JobResult {
@@ -83,13 +85,15 @@ export const actionSchema = z.object({
         })
     ]).optional(),
     getByName: z.string().optional(),
+    getByAltText: z.string().optional(),
     // Action-specific properties
     text: z.string().optional(),
     timeout: z.number().min(0).max(60000).optional(),
     url: z.string().url().optional(),
     x: z.number().optional(),
     y: z.number().optional(),
-    toContainText: z.string().optional()
+    toContainText: z.string().optional(),
+    toBeVisible: z.boolean().optional()
 })
 
 export const jobConfigSchema = z.object({
@@ -97,7 +101,7 @@ export const jobConfigSchema = z.object({
     browserType: z.enum(['chromium', 'firefox', 'webkit']),
     actions: z.array(actionSchema).min(1).max(50),
     options: z.object({
-        timeout: z.number().min(1000).max(300000).optional(),
+        timeout: z.number().min(1000).max(120000).optional(), // Max 2 minutes per action
         viewport: z.object({
             width: z.number().min(320).max(1920),
             height: z.number().min(240).max(1080)

@@ -17,26 +17,18 @@ content-type: application/json
   "deviceType": "desktop",
   "browserType": "chromium",
   "actions": [
-	{
+    {
         "type": "goto",
-        "url": "https://www.checklyhq.com/"
+        "url": "https://welcome.checklyhq.com/"
     },
     {
         "type": "click",
-        "getByText": "Product"
-    },
-    {
-        "type": "click",
-        "getByText": "Synthetic Monitoring"
-    },
-    {
-        "type": "click",
-        "getByText": "Install the CLI"
+        "getByText": "/docs"
     },
     {
         "type": "expect",
-        "selector": "h1",
-        "toContainText": "Getting started with the Checkly CLI"
+        "getByAltText": "checkly logo",
+        "toBeVisible": true
     },
     {
         "type": "screenshot"
@@ -106,23 +98,10 @@ Response when job has completed successfully:
       "screenshots": [
         "/api/v1/jobs/9d229d4b-9bcf-4867-9866-a317a7c693fb/screenshots/edf23531-b0db-4f75-9db4-c2b8a425f5d7.png"
       ],
-      "finalUrl": "https://www.checklyhq.com/"
+      "finalUrl": "https://www.checklyhq.com/docs/"
     },
     "trace": {
-      "steps": [
-        {
-          "action": "goto https://www.checklyhq.com/",
-          "timestamp": "2025-08-21T06:38:37.867Z",
-          "duration": 24000,
-          "success": true
-        },
-        {
-          "action": "screenshot",
-          "timestamp": "2025-08-21T06:38:38.372Z",
-          "duration": 505,
-          "success": true
-        }
-      ],
+      "steps": [...],
       "traceViewerUrl": "https://trace.playwright.dev/?trace=https://ghost-playwright.rakhimd.workers.dev/api/v1/jobs/9d229d4b-9bcf-4867-9866-a317a7c693fb/trace"
     }
   }
@@ -147,11 +126,12 @@ Supported parameters for jobs:
     - `'scroll'`
     - `'expect'`
 
-An action is executor on a locator. Supported locators:
+An action is executor on a locator. Supported locators (no support for regular expressions yet):
 - `selector`
 - `getByLabel`
 - `getByText`
 - `getByName`
+- `getByAltText`
 
 Action-specific properties:
 - `timeout`: number of milliseconds (this is timeout per action, not the whole job)
@@ -160,6 +140,7 @@ Action-specific properties:
 - `x`: used for `scroll`
 - `y`: used for `scroll`
 - `toContainText`: used for `expect`
+- `toBeVisible`: used for `expect`
 
 ## Notes and todos
 
